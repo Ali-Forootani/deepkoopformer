@@ -10,7 +10,7 @@ authors = [
     { name="Ali Forootani", email="aliforootani@ieee.org" }
 ]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = "==3.10.x"
 license = {text = "MIT"}
 
 dependencies = [

@@ -8,7 +8,7 @@ setup(
     author_email="aliforootani@ieee.org",
     url="https://github.com/yourusername/deepkoopformer",  # change if available
     packages=find_packages(include=["deepkoopformer", "deepkoopformer.*"]),
-    python_requires="==3.10.6",
+    python_requires="==3.10.x",
     install_requires=[
         "numpy==1.24.4",
     "pandas==1.5.3",
