@@ -1,0 +1,4 @@
+exmples/wind_speeds_2020.npy
+examples/pressure_surface_2020.npy
+deepkoopformer/__pycache__.py
+examples/*.npy
