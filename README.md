@@ -96,6 +96,23 @@ model = Koopformer_PatchTST(num_features=3, seq_len=120, horizon=20, patch_len=1
 pred, loss, eig = train(model, x_in, x_out, epochs=200, koop_attr="koop")
 ```
 
+## Example Figures
+
+### DeepKoopFormer Pressure Surface (Fixed Patch, 5 Channels)
+![Pressure Surface Fixed Patch](pictures/koopformer_pressure_surface_fixed_patch_5channel.png)
+
+### DeepKoopFormer Pressure Surface (Patch 120, H=15, d=8)
+![Pressure Surface Patch 120 H15 d8](pictures/koopformer_pressure_surface_patch120_h15_d8.png)
+
+### DeepKoopFormer Wind Prediction (Patch 120, H=15, d=32)
+![Wind Prediction Patch 120 H15 d32](pictures/koopformer_wind_pred_patch120_h15_d32.png)
+
+### DeepKoopFormer Wind Speed (Fixed Patch, 5 Channels)
+![Wind Speed Fixed Patch](pictures/koopformer_wind_speed_fixed_patch_5channel.png)
+
+
+
+
 ---
 
 ## Workflow
