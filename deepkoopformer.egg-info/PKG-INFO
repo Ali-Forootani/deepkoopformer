@@ -1,0 +1,36 @@
+Metadata-Version: 2.4
+Name: deepkoopformer
+Version: 0.1.0
+Summary: Koopman-augmented transformer models for scientific time series forecasting
+Home-page: https://github.com/yourusername/deepkoopformer
+Author: Ali Forootani
+Author-email: aliforootani@ieee.org
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.10
+Requires-Dist: numpy==1.24.4
+Requires-Dist: pandas==1.5.3
+Requires-Dist: matplotlib==3.7.1
+Requires-Dist: scikit-learn==1.2.2
+Requires-Dist: scipy==1.10.1
+Requires-Dist: torch==2.0.1
+Requires-Dist: seaborn>=0.13.2
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: flake8; extra == "dev"
+Requires-Dist: isort; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: sphinx; extra == "docs"
+Requires-Dist: numpydoc; extra == "docs"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: home-page
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

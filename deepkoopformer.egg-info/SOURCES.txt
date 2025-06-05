@@ -1,0 +1,14 @@
+README.md
+setup.py
+deepkoopformer/__init__.py
+deepkoopformer/backbone.py
+deepkoopformer/dataset.py
+deepkoopformer/koopman.py
+deepkoopformer/layers.py
+deepkoopformer/plot.py
+deepkoopformer/train.py
+deepkoopformer.egg-info/PKG-INFO
+deepkoopformer.egg-info/SOURCES.txt
+deepkoopformer.egg-info/dependency_links.txt
+deepkoopformer.egg-info/requires.txt
+deepkoopformer.egg-info/top_level.txt
