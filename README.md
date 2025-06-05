@@ -1,6 +1,3 @@
-Absolutely! Here is a **full, ready-to-use `README.md`** for your DeepKoopFormer project, incorporating theory, usage, code structure, and referencing your benchmarking script and the associated PDF. You can copy this directly into your repo.
-
----
 
 ````markdown
 # DeepKoopFormer
@@ -182,8 +179,6 @@ ddeepkoopformer/
 
 **Provable guarantees** include closed-form error decay under perturbations, bounded gradients, and robustness on long-range predictions.
 
-See the [PDF in this repository](./Transformers_for_energy_system_modeling_time_series-95.pdf) for detailed model architecture, mathematical justification, and full benchmarking results.
-
 ---
 
 ## Results
@@ -211,7 +206,7 @@ If you use DeepKoopFormer in your work, please cite:
 @article{Forootani2024deepkoopformer,
   title={DeepKoopFormer: A Koopman Enhanced Transformer Based Architecture for Time Series Forecasting},
   author={Ali Forootani and ...},
-  year={2024},
+  year={2025},
   note={arXiv preprint arXiv:XXXX.XXXXX}
 }
 ```
@@ -231,16 +226,3 @@ Helmholtz Center for Environmental Research-UFZ, Leipzig, Germany
 [aliforootani@ieee.org](mailto:aliforootani@ieee.org) / [ali.forootani@ufz.de](mailto:ali.forootani@ufz.de)
 
 ---
-
-```
-
----
-
-**Tips:**
-- Add badges (arXiv, license, etc.) if desired.
-- Adjust emails, URLs, and example paths to your repo structure.
-- Link to the PDF in the repo for detailed theoretical/methodological background.
-- If publishing to PyPI or similar, further simplify the README as needed.
-
-Let me know if you want additional sections (e.g., “Contributing”, “Troubleshooting”) or want a version tailored for a specific audience!
-```
