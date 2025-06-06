@@ -21,11 +21,11 @@ root_dir = setting_directory(1)  # Example path for Windows
 
 print(root_dir)
 
-from deepkoopformer.deepkoopformer.train import set_seed, train
-from deepkoopformer.deepkoopformer.backbone import SimpleLSTMForecaster, Koopformer_PatchTST, Koopformer_Informer, Koopformer_Autoformer
-from deepkoopformer.deepkoopformer.dataset import build_dataset
-from deepkoopformer.deepkoopformer.plot import plot_training, plot_per_feature
-from deepkoopformer.deepkoopformer.plot import save_results
+from deepkoopformer.train import set_seed, train
+from deepkoopformer.backbone import SimpleLSTMForecaster, Koopformer_PatchTST, Koopformer_Informer, Koopformer_Autoformer
+from deepkoopformer.dataset import build_dataset
+from deepkoopformer.plot import plot_training, plot_per_feature
+from deepkoopformer.plot import save_results
 
 
 
