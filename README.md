@@ -153,6 +153,9 @@ ddeepkoopformer/
 │   ├── Rossler_strickt_koop_patchtst_auto_in_former_svd_lypanov.py
 │   ├── Rossler_strickt_koop_patchtst_former_svd_lypanov.py
 │   ├── VanderPol_strickt_koop_patch_auto_in_former_svd_lyapanov.py
+│   ├── deep_koop_patchtst_auto_info_former_lstm_grid_crypto_currency.py
+│   ├── deep_koop_patchtst_auto_info_former_lstm_grid_energy_system.py
+│   ├── deep_koop_patchtst_auto_info_former_lstm_wind_speed_era5.py
 │   ├── pressure_surface_2020.npy
 │   └── wind_speeds_2020.npy
 │
@@ -198,14 +201,14 @@ ddeepkoopformer/
 
 ## Reference
 
-For theoretical background, methodology, and empirical benchmarks, please see the [PDF](./Transformers_for_energy_system_modeling_time_series-95.pdf).
+For theoretical background, methodology, and empirical benchmarks, please see the [PDF](https://arxiv.org/abs/2505.20048).
 
 If you use DeepKoopFormer in your work, please cite:
 
 ```bibtex
 @article{Forootani2024deepkoopformer,
   title={DeepKoopFormer: A Koopman Enhanced Transformer Based Architecture for Time Series Forecasting},
-  author={Ali Forootani and ...},
+  author={Ali Forootani, Mohammad Khosravi, Masoud Barati},
   year={2025},
   note={arXiv preprint arXiv:XXXX.XXXXX}
 }
