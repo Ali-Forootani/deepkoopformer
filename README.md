@@ -201,7 +201,7 @@ ddeepkoopformer/
 
 * **Results:**
 
-For the results of the experiments see the [Zenodo](https://zenodo.org/records/15826887)
+For the results of the experiments see the [Zenodo](https://doi.org/10.5281/zenodo.15826887)
 
 * **Benchmarks:**
 
