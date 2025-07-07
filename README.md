@@ -190,7 +190,15 @@ ddeepkoopformer/
   Koopman-augmented models accurately forecast nonlinear and chaotic signals (e.g., Van der Pol, Lorenz systems), with strong robustness to noise.
 
 * **Climate Datasets:**
-  Outperform LSTM and standard transformers on CMIP6 wind speed and surface pressure, especially for longer horizons and higher dimensions.
+  Outperform LSTM and standard transformers on CMIP6/ERA5 wind speed and surface pressure, especially for longer horizons and higher dimensions.
+  
+* **Electricity Generation Datasets:**
+  See [Link](https://github.com/afshinfaramarzi/Energy-Demand-electricity-price-Forecasting/tree/main)
+
+* **Crypto Currency Datasets:**
+
+  See [Link](https://github.com/Chisomnwa/Cryptocurrency-Data-Analysis)
+
 
 * **Benchmarks:**
 
