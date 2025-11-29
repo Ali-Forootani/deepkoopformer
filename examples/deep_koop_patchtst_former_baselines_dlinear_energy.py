@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jul  8 09:51:52 2025
+Created on Fri Nov 21 15:37:08 2025
 
 @author: forootan
 """
@@ -9,21 +9,22 @@ Created on Tue Jul  8 09:51:52 2025
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Koopformer-PRO benchmark on Wind-Speed data (HPC-ready)
+Koopformer-PRO benchmark on Wind-Speed (and similar) data, with extended baselines.
 
-Sweeps
-  • patch lengths     [80, 90, 100, 110, 120, 130]
-  • forecast horizons [10, 15, 20, 25, 30]
+Ablations (PatchTST backbone):
+  1) PatchTSTBaseline (pure Transformer, no latent propagator)
+  2) PatchTST_UnconstrainedLatent (Transformer + unconstrained linear latent layer)
+  3) Koopformer_PatchTST_NoLyap (ODO parameterisation, no Lyapunov term)
+  4) Koopformer_PatchTST (full DeepKoopFormer: ODO + Lyapunov regularisation)
 
-Each Koopformer variant accepts `patch_len`:
+Additional baselines:
+  - DLinearForecaster  (linear baseline)
+  - SimpleLSTMForecaster  (recurrent baseline)
 
-  · Koopformer_PatchTST   – real patch embedding
-  · Koopformer_Autoformer – trend-kernel length = patch_len
-  · Koopformer_Informer   – optional patch embedding
-
-2025-05-20  – Ali Forootani  
-Modified: DLinear baseline added & bug-fixed (2025-07-08)
+2025-05-20  – Ali Forootani
+Modified: extended baselines & ablations (2025-11-21)
 """
+
 # --------------------------------------------------------------------------- #
 # 0)  HPC-safe backend & imports                                              #
 # --------------------------------------------------------------------------- #
@@ -63,6 +64,9 @@ def _orth(w: torch.Tensor) -> torch.Tensor:
     return torch.linalg.qr(w)[0]
 
 class StrictStableKoopmanOperator(nn.Module):
+    """
+    ODO parameterisation with spectral radius < ρ_max.
+    """
     def __init__(self, latent_dim: int, ρ_max: float = 0.99):
         super().__init__()
         self.U_raw = nn.Parameter(torch.randn(latent_dim, latent_dim))
@@ -75,6 +79,21 @@ class StrictStableKoopmanOperator(nn.Module):
         Σ = torch.sigmoid(self.S_raw) * self.ρ_max
         K = U @ torch.diag(Σ) @ V.T
         return z @ K.T, K, Σ
+
+class LinearLatentPropagator(nn.Module):
+    """
+    Unconstrained linear latent layer: z_next = W z.
+    Used for ablation: Transformer + unconstrained linear latent layer.
+    """
+    def __init__(self, latent_dim: int):
+        super().__init__()
+        self.W = nn.Linear(latent_dim, latent_dim, bias=False)
+
+    def forward(self, z: torch.Tensor):
+        # match interface of StrictStableKoopmanOperator
+        K = self.W.weight.T   # for logging if needed
+        Σ = None
+        return self.W(z), K, Σ
 
 # --------------------------------------------------------------------------- #
 # 3)  Positional encodings & patch embed                                      #
@@ -101,12 +120,13 @@ class PatchEmbed1D(nn.Module):
                               kernel_size=patch_len, stride=stride)
 
     def forward(self, x):
+        # x: (B, T, C)
         x = x.permute(0, 2, 1)     # (B, C, T)
         x = self.conv(x)           # (B, d, T//patch)
         return x.permute(0, 2, 1)  # (B, P, d)
 
 # --------------------------------------------------------------------------- #
-# 4)  PatchTST backbone & Koopformer                                          #
+# 4)  PatchTST backbone & DeepKoopFormer variants                             #
 # --------------------------------------------------------------------------- #
 class PatchTST_Backbone(nn.Module):
     def __init__(self, input_dim: int, seq_len: int,
@@ -124,13 +144,59 @@ class PatchTST_Backbone(nn.Module):
         self.cls = nn.Parameter(torch.randn(1, 1, d_model))
 
     def forward(self, x):
-        x   = self.patch(x)
+        x   = self.patch(x)                     # (B, P, d)
         cls = self.cls.expand(x.size(0), -1, -1)
-        x   = torch.cat([cls, x], dim=1)
+        x   = torch.cat([cls, x], dim=1)        # (B, 1+P, d)
         x   = self.encoder(self.pos(x))
-        return x[:, 0]
+        return x[:, 0]                          # cls token (B, d_model)
+
+class PatchTSTBaseline(nn.Module):
+    """
+    Baseline Transformer (PatchTST backbone with direct head).
+    This corresponds to ablation (1) in the review.
+    """
+    def __init__(self, input_dim, seq_len, horizon,
+                 patch_len, d_model=64):
+        super().__init__()
+        self.backbone = PatchTST_Backbone(input_dim, seq_len,
+                                          patch_len=patch_len,
+                                          d_model=d_model)
+        self.fc   = nn.Linear(d_model, horizon * input_dim)
+
+    def forward(self, x, return_latents=False):
+        z    = self.backbone(x)
+        pred = self.fc(z)
+        if return_latents:
+            return pred, z, z
+        return pred
+
+class PatchTST_UnconstrainedLatent(nn.Module):
+    """
+    Transformer + unconstrained linear latent layer.
+    Ablation (2): no spectral constraint, no Lyapunov (set lyap_weight=0).
+    """
+    def __init__(self, input_dim, seq_len, horizon,
+                 patch_len, d_model=64):
+        super().__init__()
+        self.backbone = PatchTST_Backbone(input_dim, seq_len,
+                                          patch_len=patch_len,
+                                          d_model=d_model)
+        self.koop = LinearLatentPropagator(d_model)
+        self.fc   = nn.Linear(d_model, horizon * input_dim)
+
+    def forward(self, x, return_latents=False):
+        z       = self.backbone(x)
+        z_next, _, _ = self.koop(z)
+        pred    = self.fc(z_next)
+        if return_latents:
+            return pred, z, z_next
+        return pred
 
 class Koopformer_PatchTST(nn.Module):
+    """
+    Full DeepKoopFormer variant on PatchTST backbone
+    (ODO + Lyapunov; ablation (4) in the review).
+    """
     def __init__(self, input_dim, seq_len, horizon,
                  patch_len, d_model=64):
         super().__init__()
@@ -149,7 +215,7 @@ class Koopformer_PatchTST(nn.Module):
         return pred
 
 # --------------------------------------------------------------------------- #
-# 5)  Autoformer backbone & Koopformer                                        #
+# 5)  Autoformer backbone & Koopformer (kept for reference, optional)         #
 # --------------------------------------------------------------------------- #
 class SeriesDecomp(nn.Module):
     def __init__(self, k: int = 3):
@@ -203,7 +269,7 @@ class Koopformer_Autoformer(nn.Module):
         return pred
 
 # --------------------------------------------------------------------------- #
-# 6)  Informer backbone & Koopformer                                          #
+# 6)  Informer backbone & Koopformer (kept for reference, optional)           #
 # --------------------------------------------------------------------------- #
 class InformerSparse(nn.Module):
     def __init__(self, input_dim, d_model=64, num_heads=4,
@@ -276,7 +342,6 @@ class SimpleLSTMForecaster(nn.Module):
 class DLinearForecaster(nn.Module):
     """
     DLinear: Decomposition-Linear baseline (Zeng et al., 2022).
-    For each feature, applies a 1-D Conv from input window (seq_len) to forecast horizon.
     """
     def __init__(self, input_dim, seq_len, horizon):
         super().__init__()
@@ -290,7 +355,6 @@ class DLinearForecaster(nn.Module):
 
     def forward(self, x, return_latents=False):
         # x: (B, seq_len, input_dim)
-        # ► FIX START ────────────────────────────────────────────────────────
         outs = []
         for i, linear in enumerate(self.linears):
             xi = x[:, :, i].unsqueeze(1)          # (B, 1, seq_len)
@@ -300,10 +364,9 @@ class DLinearForecaster(nn.Module):
             yi = linear(xi)                       # (B, 1, 1) or (B, 1, H)
             if yi.shape[-1] == 1 and self.horizon > 1:
                 yi = yi.expand(-1, -1, self.horizon)
-            outs.append(yi)                       # keep 3-D (B, 1, H)
+            outs.append(yi)                       # (B, 1, H)
         out = torch.cat(outs, dim=1)              # (B, F, H)
         out = out.permute(0, 2, 1).reshape(x.size(0), -1)  # (B, F·H)
-        # ► FIX END ──────────────────────────────────────────────────────────
         if return_latents:
             return out, out, out
         return out
@@ -313,6 +376,10 @@ class DLinearForecaster(nn.Module):
 # --------------------------------------------------------------------------- #
 def build_dataset(data: np.ndarray, indices: list[int],
                   seq_len: int, horizon: int):
+    """
+    Build sliding-window dataset.
+    Here seq_len = patch_len in your original script.
+    """
     sub = data[0:2500, indices]
     scaler = MinMaxScaler().fit(sub)
     sub = scaler.transform(sub)
@@ -337,6 +404,11 @@ def _nested_getattr(obj, path: str):
 
 def train(model, x_in, x_out, epochs=4000, lr=3e-4,
           koop_attr="koop", lyap_weight=0.1):
+    """
+    Generic training loop with optional Lyapunov regularisation.
+    If `koop_attr` is None, no eigenvalue logging is done.
+    If `lyap_weight = 0`, this becomes predictive-only training.
+    """
     model.to(DEV)
     x_in, x_out = x_in.to(DEV), x_out.to(DEV)
     opt = optim.Adam(model.parameters(), lr=lr)
@@ -360,7 +432,8 @@ def train(model, x_in, x_out, epochs=4000, lr=3e-4,
             znp = torch.einsum("bi,ij->bj", z_next, P)
             lyap = torch.relu((znp * z_next).sum(1)
                               - (zp * z).sum(1)).mean()
-        else: lyap = torch.zeros(1, device=DEV)
+        else:
+            lyap = torch.zeros(1, device=DEV)
         loss = pred_loss + lyap_weight * lyap
         loss.backward(); opt.step()
         losses.append(loss.item())
@@ -373,8 +446,8 @@ def train(model, x_in, x_out, epochs=4000, lr=3e-4,
 
         if ep % max(1, epochs//10) == 0 or ep == epochs-1:
             print(f"Epoch {ep:>4}/{epochs}  "
-                  f"MSE {pred_loss.item():.5f}  "
-                  f"Lyap {(lyap_weight*lyap).item():.5f}")
+                  f"MSE {pred_loss.item():.5e}  "
+                  f"Lyap {(lyap_weight*lyap).item():.5e}")
 
     model.eval()
     with torch.no_grad():
@@ -429,9 +502,13 @@ def plot_per_feature(x_out: np.ndarray, preds: dict, F: int, H: int, save_path: 
         ax = axes[f]
         ax.plot(t, gt[:, f], lw=3, label="Ground Truth", color="black")
         for i, (n, p) in enumerate(preds_plot.items()):
-            ax.plot(t, p[:, f], label=n, color=_COLORS[i % len(_COLORS)], linestyle=_STYLES[i % len(_STYLES)], linewidth=3)
-        ax.set_ylabel("Value"); ax.grid(True, which="both", linestyle="--", alpha=0.6)
-        if f == 0: ax.legend(ncol=3)
+            ax.plot(t, p[:, f], label=n,
+                    color=_COLORS[i % len(_COLORS)],
+                    linestyle=_STYLES[i % len(_STYLES)], linewidth=3)
+        ax.set_ylabel("Value"); ax.grid(True, which="both",
+                                        linestyle="--", alpha=0.6)
+        if f == 0:
+            ax.legend(ncol=3)
     axes[-1].set_xlabel("Sample")
     fig.tight_layout()
     if save_path:
@@ -472,17 +549,21 @@ def main(file="bitstamp_windows.npy", epochs=200, seq_len=120,
     for patch_len in patch_lens:
         for horizon in horizons:
             print(f"\n>>> patch_len={patch_len}, horizon={horizon}\n")
+            # Here, seq_len == patch_len as in your original script.
             x_in, x_out, _ = build_dataset(raw, indices,
                                            patch_len, horizon)
             F, H = len(indices), horizon
             res_plot = {}
             x_np = x_out.numpy()
 
-            # ----- DLinear -----
+            # =========================
+            # 1) DLinear baseline
+            # =========================
             print("== DLinear ==")
             dlinear = DLinearForecaster(F, patch_len, horizon)
             pred, loss, eig = train(dlinear, x_in, x_out,
-                                    epochs=epochs, koop_attr=None, lyap_weight=0)
+                                    epochs=epochs, koop_attr=None,
+                                    lyap_weight=0)
             res_plot["DLinear"] = {"pred": pred, "loss": loss,
                                    "eig": eig, "x_out": x_np}
             prefix = save_dir / f"DLinear_{patch_len}_{horizon}"
@@ -490,17 +571,94 @@ def main(file="bitstamp_windows.npy", epochs=200, seq_len=120,
                          patch_len, horizon)
             torch.save(dlinear.cpu().state_dict(), f"{prefix}.pt")
 
-            # ----- PatchTST -----
-            print("== PatchTST ==")
-            m = Koopformer_PatchTST(F, patch_len, horizon,
-                                    patch_len=patch_len, d_model=96)
-            pred, loss, eig = train(m, x_in, x_out, epochs=epochs, koop_attr="koop")
-            res_plot["Koop-PatchTST"] = {"pred": pred, "loss": loss,
-                                         "eig": eig, "x_out": x_np}
-            prefix = save_dir / f"PatchTST_{patch_len}_{horizon}"
-            save_results(res_plot["Koop-PatchTST"], prefix, metrics_file,
+            # =========================
+            # 2) LSTM baseline
+            # =========================
+            print("== LSTM ==")
+            lstm = SimpleLSTMForecaster(F, hidden_dim=96,
+                                       num_layers=2, horizon=horizon)
+            pred, loss, eig = train(lstm, x_in, x_out,
+                                    epochs=epochs, koop_attr=None,
+                                    lyap_weight=0)
+            res_plot["LSTM"] = {"pred": pred, "loss": loss,
+                                "eig": eig, "x_out": x_np}
+            prefix = save_dir / f"LSTM_{patch_len}_{horizon}"
+            save_results(res_plot["LSTM"], prefix, metrics_file,
                          patch_len, horizon)
-            torch.save(m.cpu().state_dict(), f"{prefix}.pt")
+            torch.save(lstm.cpu().state_dict(), f"{prefix}.pt")
+
+            # =========================
+            # 3) Baseline Transformer (PatchTST)
+            # =========================
+            print("== PatchTSTBaseline ==")
+            base_tst = PatchTSTBaseline(F, patch_len, horizon,
+                                        patch_len=patch_len, d_model=96)
+            pred, loss, eig = train(base_tst, x_in, x_out,
+                                    epochs=epochs, koop_attr=None,
+                                    lyap_weight=0)
+            res_plot["PatchTST"] = {"pred": pred, "loss": loss,
+                                    "eig": eig, "x_out": x_np}
+            prefix = save_dir / f"PatchTST_{patch_len}_{horizon}"
+            save_results(res_plot["PatchTST"], prefix, metrics_file,
+                         patch_len, horizon)
+            torch.save(base_tst.cpu().state_dict(), f"{prefix}.pt")
+
+            # =========================
+            # 4) Transformer + unconstrained linear latent
+            # =========================
+            print("== PatchTST + Unconstrained Latent ==")
+            unc_lat = PatchTST_UnconstrainedLatent(F, patch_len, horizon,
+                                                   patch_len=patch_len,
+                                                   d_model=96)
+            pred, loss, eig = train(unc_lat, x_in, x_out,
+                                    epochs=epochs, koop_attr=None,
+                                    lyap_weight=0)
+            res_plot["PatchTST+LinearLatent"] = {
+                "pred": pred, "loss": loss,
+                "eig": eig, "x_out": x_np
+            }
+            prefix = save_dir / f"PatchTST_LinearLatent_{patch_len}_{horizon}"
+            save_results(res_plot["PatchTST+LinearLatent"], prefix,
+                         metrics_file, patch_len, horizon)
+            torch.save(unc_lat.cpu().state_dict(), f"{prefix}.pt")
+
+            # =========================
+            # 5) Koopformer (ODO) without Lyapunov term
+            # =========================
+            print("== Koopformer-PatchTST (NO Lyap) ==")
+            koop_no_lyap = Koopformer_PatchTST(F, patch_len, horizon,
+                                               patch_len=patch_len,
+                                               d_model=96)
+            pred, loss, eig = train(koop_no_lyap, x_in, x_out,
+                                    epochs=epochs, koop_attr="koop",
+                                    lyap_weight=0.0)
+            res_plot["Koop-PatchTST-NoLyap"] = {
+                "pred": pred, "loss": loss,
+                "eig": eig, "x_out": x_np
+            }
+            prefix = save_dir / f"KoopPatchTST_NoLyap_{patch_len}_{horizon}"
+            save_results(res_plot["Koop-PatchTST-NoLyap"], prefix,
+                         metrics_file, patch_len, horizon)
+            torch.save(koop_no_lyap.cpu().state_dict(), f"{prefix}.pt")
+
+            # =========================
+            # 6) Full DeepKoopFormer (ODO + Lyap)
+            # =========================
+            print("== Koopformer-PatchTST (FULL: ODO + Lyap) ==")
+            koop_full = Koopformer_PatchTST(F, patch_len, horizon,
+                                            patch_len=patch_len,
+                                            d_model=96)
+            pred, loss, eig = train(koop_full, x_in, x_out,
+                                    epochs=epochs, koop_attr="koop",
+                                    lyap_weight=0.1)
+            res_plot["Koop-PatchTST-Full"] = {
+                "pred": pred, "loss": loss,
+                "eig": eig, "x_out": x_np
+            }
+            prefix = save_dir / f"KoopPatchTST_Full_{patch_len}_{horizon}"
+            save_results(res_plot["Koop-PatchTST-Full"], prefix,
+                         metrics_file, patch_len, horizon)
+            torch.save(koop_full.cpu().state_dict(), f"{prefix}.pt")
 
             # ----- Figures -----
             plot_training(res_plot,
@@ -513,7 +671,7 @@ def main(file="bitstamp_windows.npy", epochs=200, seq_len=120,
             print("\nFinal metrics (train set):")
             for n, r in res_plot.items():
                 e = r["x_out"] - r["pred"]
-                print(f"{n:<18s} MSE {(e**2).mean():.4e} "
+                print(f"{n:<25s} MSE {(e**2).mean():.4e} "
                       f"MAE {np.abs(e).mean():.4e}")
 
 # --------------------------------------------------------------------------- #
@@ -521,10 +679,10 @@ def main(file="bitstamp_windows.npy", epochs=200, seq_len=120,
 # --------------------------------------------------------------------------- #
 if __name__ == "__main__":
     p = argparse.ArgumentParser(
-        description="Koopformer-PRO benchmark (HPC-ready)")
+        description="Koopformer-PRO benchmark (HPC-ready) with extended baselines")
     p.add_argument("--file", type=str, default="./df_cleaned_numeric_2.npy")
     p.add_argument("--epochs", type=int, default=4000)
-    p.add_argument("--seq_len", type=int, default=120)
+    p.add_argument("--seq_len", type=int, default=120)  # kept for compatibility
     p.add_argument("--save_dir", type=str, default="results")
     args = p.parse_args()
     main(file=args.file, epochs=args.epochs,
